@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prenotazioni Interrogazioni</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+    h1 { text-align: center; }
+    .date-group { margin-bottom: 20px; }
+    ul { padding-left: 20px; list-style-type: none; }
+    li { display: flex; justify-content: space-between; margin: 5px 0; }
+    button { background-color: red; color: white; border: none; padding: 5px 10px; cursor: pointer; }
+    button:hover { background-color: darkred; }
+    .full { color: red; font-weight: bold; }
+    .input-area { margin-bottom: 20px; }
+    .input-area input, .input-area select { margin-right: 10px; padding: 5px; }
+    @media (max-width: 600px) {
+      body { padding: 10px; }
+      h1 { font-size: 1.5em; }
+    }
+  </style>
+</head>
+<body>
+
+<h1>Prenotazioni Interrogazioni</h1>
+
+<div id="adminArea" style="display:none;">
+  <p>Modalità: <strong>Admin</strong></p>
+  <div class="input-area">
+    <label for="dateSelect">Data:</label>
+    <select id="dateSelect">
+      <option value="21">21 Marzo</option>
+      <option value="22">22 Marzo</option>
+      <option value="23">23 Marzo</option>
+      <option value="24">24 Marzo</option>
+      <option value="25">25 Marzo</option>
+    </select>
+
+    <label for="studentName">Nome:</label>
+    <input type="text" id="studentName">
+    <button onclick="aggiungiPrenotazione()">Aggiungi</button>
+  </div>
+</div>
+
+<hr>
+<div id="prenotazioni"></div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
+  import { getDatabase, ref, set, get, onValue, child, update, remove } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDz0ftScCcGGnez9aJAJQwkVzCQ1xRhoB4",
+    authDomain: "prenotazioni-1ab25.firebaseapp.com",
+    projectId: "prenotazioni-1ab25",
+    storageBucket: "prenotazioni-1ab25.firebasestorage.app",
+    messagingSenderId: "864348479452",
+    appId: "1:864348479452:web:18f9d56d7ba7de9d743919",
+    measurementId: "G-JVL3DY0JS2",
+    databaseURL: "https://prenotazioni-1ab25-default-rtdb.europe-west1.firebasedatabase.app"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+
+  const limiti = { "21": 6, "22": 6, "23": 6, "24": 6, "25": 6 };
+  let prenotati = { "21": [], "22": [], "23": [], "24": [], "25": [] };
+  let isAdmin = false;
+
+  function aggiornaLimiti() {
+    const seiDate = Object.values(prenotati).filter(p => p.length === 6).length;
+    if (seiDate >= 1) {
+      for (let giorno in prenotati) {
+        if (prenotati[giorno].length < 6) {
+          limiti[giorno] = 5;
+        }
+      }
+    }
+  }
+
+  function aggiornaVisuale() {
+    const div = document.getElementById("prenotazioni");
+    div.innerHTML = "";
+    for (let giorno in prenotati) {
+      const lista = prenotati[giorno] || [];
+      const gruppo = document.createElement("div");
+      gruppo.className = "date-group";
+      let titolo = `Data ${giorno} Marzo - ${lista.length}/${limiti[giorno]} prenotati`;
+      if (lista.length >= limiti[giorno]) titolo += " (Completo)";
+      const elenco = lista.map((nome, index) => 
+        `<li>${nome} <button onclick="cancellaPrenotazione('${giorno}', '${index}')">Cancella</button></li>`
+      ).join("");
+      gruppo.innerHTML = `<h3>${titolo}</h3><ul>${elenco}</ul>`;
+      div.appendChild(gruppo);
+    }
+  }
+
+  function caricaDati() {
+    const prenRef = ref(db, 'prenotazioni');
+    onValue(prenRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) prenotati = data;
+      aggiornaLimiti();
+      aggiornaVisuale();
+    });
+  }
+
+  function aggiungiPrenotazione() {
+    if (!isAdmin) return;
+
+    const nome = document.getElementById("studentName").value.trim();
+    const giorno = document.getElementById("dateSelect").value;
+
+    if (!nome) {
+      alert("Inserisci un nome.");
+      return;
+    }
+
+    for (let g in prenotati) {
+      if (prenotati[g].includes(nome)) {
+        alert("Lo studente è già prenotato per un altro giorno.");
+        return;
+      }
+    }
+
+    if (prenotati[giorno]?.includes(nome)) {
+      alert("Studente già prenotato per questa data.");
+      return;
+    }
+
+    if (prenotati[giorno].length >= limiti[giorno]) {
+      alert("Questa data ha raggiunto il limite.");
+      return;
+    }
+
+    prenotati[giorno].push(nome);
+    aggiornaLimiti();
+    update(ref(db, 'prenotazioni'), prenotati);
+    document.getElementById("studentName").value = "";
+  }
+
+  function cancellaPrenotazione(giorno, index) {
+    if (!isAdmin) return;
+
+    prenotati[giorno].splice(index, 1);
+    aggiornaLimiti();
+    update(ref(db, 'prenotazioni'), prenotati);
+  }
+
+  function chiediPassword() {
+    const pass = prompt("Inserisci la password per accedere alla modalità Admin:");
+    if (pass === "prof123") {
+      isAdmin = true;
+      document.getElementById("adminArea").style.display = "block";
+    } else {
+      alert("Accesso come ospite. Solo visualizzazione.");
+    }
+  }
+
+  chiediPassword();
+  caricaDati();
+</script>
+
+</body>
+</html>
